@@ -166,9 +166,9 @@ const CLASSES=[
  ['Collège',['4ème','3ème']],
  ['Lycée général et technologique',['2nde générale et techno','1ère générale','Terminale générale','1ère STAV','Terminale STAV']],
  ['Lycée professionnel',['2nde pro productions','Bac pro CGEA 1ère année','Bac pro CGEA Terminale']],
- ['Apprentissage',['CAPa 1ère année','CAPa 2ème année','Bac pro CGEA apprentissage 2nde','Bac pro CGEA apprentissage 1ère','Bac pro CGEA apprentissage Terminale']],
+ ['Apprentissage',['CAPa 1ère année','CAPa 2ème année','Bac pro CGEA apprentissage 1ère','Bac pro CGEA apprentissage Terminale']],
  ['BTSA',['BTSA ACSE 1ère année','BTSA ACSE 2ème année','BTSA GDEA 1ère année','BTSA GDEA 2ème année','BTSA ACSE apprentissage 1ère année','BTSA ACSE apprentissage 2ème année','BTSA GDEA apprentissage 1ère année','BTSA GDEA apprentissage 2ème année','BTSA Agronomie et cultures durables (apprentissage)']],
- ['Licence',['Licence pro MTSP temps plein','Licence pro MTSP apprentissage']],
+ ['Licence',['Licence']],
  ['Autre',['Personnel / parent / autre']]];
 const ALLCOLS=[...new Set(ART.flatMap(a=>a.cols))];
 function opts(k,list){return `<option value="">Tous</option>`+list.map(([v,t])=>`<option value="${esc(v)}" ${F[k]==v?'selected':''}>${esc(t)}</option>`).join('')}
