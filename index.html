@@ -44,6 +44,10 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);borde
 .tg{flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:none;color:var(--mute);font:inherit;font-weight:700}
 .tg.pay{background:var(--okbg);border-color:var(--green);color:var(--green)}
 .warnbox{background:var(--wbg);border:1.5px solid var(--warn);color:var(--ink);border-radius:10px;padding:10px;margin-top:8px;font-size:14px}
+.fp{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.fp summary{font-weight:700;cursor:pointer;padding:4px 0}
+.chk{display:flex;align-items:center;gap:12px;margin:0;padding:9px 0;font-size:16px;color:var(--ink)}
+.chk input{width:24px;height:24px;padding:0;flex:none}
 .tg:disabled{opacity:.6}
 .tg.liv{background:var(--okbg);border-color:var(--green);color:var(--green)}
 .tg.no{background:var(--wbg);border-color:var(--warn);color:var(--warn)}
@@ -95,7 +99,7 @@ const eur=n=>n.toLocaleString('fr-FR')+' €';
 const lt=l=>(A(l.article).prix+(l.prenom?5:0))*l.qte;
 const ot=o=>o.lignes.reduce((s,l)=>s+lt(l),0);
 
-let orders=[],tab=1,draft=null,q='',flt='',grp='';
+let orders=[],tab=1,draft=null,q='',F={statut:'',classe:'',article:'',taille:'',couleur:'',grp:''};
 let canWrite=true,shared=false,localOld=[];
 try{localOld=JSON.parse(localStorage.getItem('acsagri_orders')||'[]')}catch(e){}
 const saveLocal=()=>{try{localStorage.setItem('acsagri_orders',JSON.stringify(orders))}catch(e){}};
@@ -158,61 +162,95 @@ function stats(){
   const t=orders.reduce((s,o)=>s+ot(o),0),r=orders.filter(o=>!o.paye).reduce((s,o)=>s+ot(o),0);
   $('#sN').textContent=orders.length;$('#sT').textContent=eur(t);$('#sR').textContent=eur(r);
 }
+const CLASSES=[
+ ['Collège',['4ème','3ème']],
+ ['Lycée général et technologique',['2nde générale et techno','1ère générale','Terminale générale','1ère STAV','Terminale STAV']],
+ ['Lycée professionnel',['2nde pro productions','Bac pro CGEA 1ère année','Bac pro CGEA Terminale']],
+ ['Apprentissage',['CAPa 1ère année','CAPa 2ème année','Bac pro CGEA apprentissage 2nde','Bac pro CGEA apprentissage 1ère','Bac pro CGEA apprentissage Terminale']],
+ ['BTSA',['BTSA ACSE 1ère année','BTSA ACSE 2ème année','BTSA GDEA 1ère année','BTSA GDEA 2ème année','BTSA ACSE apprentissage 1ère année','BTSA ACSE apprentissage 2ème année','BTSA GDEA apprentissage 1ère année','BTSA GDEA apprentissage 2ème année','BTSA Agronomie et cultures durables (apprentissage)']],
+ ['Licence',['Licence pro MTSP temps plein','Licence pro MTSP apprentissage']],
+ ['Autre',['Personnel / parent / autre']]];
+const ALLCOLS=[...new Set(ART.flatMap(a=>a.cols))];
+function opts(k,list){return `<option value="">Tous</option>`+list.map(([v,t])=>`<option value="${esc(v)}" ${F[k]==v?'selected':''}>${esc(t)}</option>`).join('')}
+function nF(){return ['statut','classe','article','taille','couleur'].filter(k=>F[k]).length+(F.grp?1:0)}
+function panel(){
+  const cl=[...new Set([...CLASSES.flatMap(g=>g[1]),...orders.map(o=>o.classe).filter(Boolean)])].map(c=>[c,c]);
+  return `<details class="fp"><summary>Filtres et groupement <span id="fcount"></span></summary>
+  <label>Statut</label><select data-f="statut">${opts('statut',[['np','À payer'],['p','Payées'],['nl','À remettre'],['l','Remises']])}</select>
+  <label>Classe</label><select data-f="classe">${opts('classe',cl)}</select>
+  <label>Article</label><select data-f="article">${opts('article',ART.map(a=>[a.id,a.nom]))}</select>
+  <div class="row"><div><label>Taille</label><select data-f="taille">${opts('taille',TAILLES.map(t=>[t,t]))}</select></div>
+  <div><label>Couleur</label><select data-f="couleur">${opts('couleur',ALLCOLS.map(c=>[c,c]))}</select></div></div>
+  <label>Grouper par</label><select data-f="grp"><option value="">Ne pas grouper</option>${[['taille','Taille'],['couleur','Couleur'],['article','Article'],['classe','Classe'],['statut','Paiement'],['livre','Remise']].map(([v,t])=>`<option value="${v}" ${F.grp==v?'selected':''}>${t}</option>`).join('')}</select>
+  <button class="btn" id="reset" style="width:100%;margin-top:12px">Tout réinitialiser</button></details>`;
+}
 function setTab(n){
   tab=n;$('#t1').className=n==1?'on':'';$('#t2').className=n==2?'on':'';
-  $('#app').innerHTML=n==1?`<div class="tools"><input id="q" placeholder="Chercher un nom ou une classe" value="${esc(q)}">
-  <select id="flt"><option value="">Toutes</option><option value="np">À payer</option><option value="p">Payées</option><option value="nl">À remettre</option><option value="l">Remises</option></select></div>
-  <div class="tools"><select id="grp"><option value="">Ne pas grouper</option><option value="taille">Grouper par taille</option><option value="couleur">Grouper par couleur</option><option value="article">Grouper par article</option><option value="classe">Grouper par classe</option></select></div><div id="list"></div>`:'<div id="tot"></div>';
-  if(n==1){$('#flt').value=flt;$('#grp').value=grp}
+  $('#app').innerHTML=n==1?`<div class="tools"><input id="q" placeholder="Chercher un nom ou une classe" value="${esc(q)}"></div>${panel()}<div id="list"></div>`:`${panel()}<div id="tot"></div>`;
   setStatus();refresh();
 }
 function refresh(){
   stats();
+  const fc=$('#fcount');if(fc)fc.textContent=nF()?'('+nF()+')':'';
   if(tab==1){const l=$('#list');if(l)l.innerHTML=list()}
   else{const t=$('#tot');if(t)t.innerHTML=totals()}
 }
 function by(o){return o.par?`<div class="sub">Saisi par ${esc(o.par)}</div>`:''}
+function rows(){
+  const qq=q.toLowerCase(),out=[];
+  orders.forEach(o=>{
+    if(qq&&!((o.nom||'')+' '+(o.classe||'')).toLowerCase().includes(qq))return;
+    if(F.statut=='np'&&o.paye||F.statut=='p'&&!o.paye||F.statut=='nl'&&o.livre||F.statut=='l'&&!o.livre)return;
+    if(F.classe&&o.classe!=F.classe)return;
+    const ls=o.lignes.filter(l=>(!F.article||l.article==F.article)&&(!F.taille||l.taille==F.taille)&&(!F.couleur||l.couleur==F.couleur));
+    if(ls.length)out.push({o,ls});
+  });
+  return out;
+}
+const flat=r=>r.flatMap(({o,ls})=>ls.map(l=>({o,l})));
+function gkey(o,l){
+  switch(F.grp){case 'taille':return l.taille;case 'couleur':return l.couleur;case 'article':return A(l.article).nom;
+    case 'classe':return o.classe||'Sans classe';case 'statut':return o.paye?'Payé':'À payer';case 'livre':return o.livre?'Remis':'À remettre'}
+}
+const gsort=(a,b)=>F.grp=='taille'?TAILLES.indexOf(a)-TAILLES.indexOf(b):a.localeCompare(b,'fr');
 function list(){
-  const f=orders.filter(o=>{
-    const s=((o.nom||'')+' '+(o.classe||'')).toLowerCase();
-    if(q&&!s.includes(q.toLowerCase()))return false;
-    if(flt=='np')return !o.paye; if(flt=='p')return !!o.paye;
-    if(flt=='nl')return !o.livre; if(flt=='l')return !!o.livre; return true});
-  if(!f.length)return `<div class="empty">${orders.length?'Aucune commande ne correspond.':'Aucune commande pour l’instant.<br>Touche « Nouvelle commande » quand un coupon est rendu.'}</div>`;
-  if(grp)return grouped(f);
+  const r=rows();
+  if(!r.length)return `<div class="empty">${orders.length?'Aucune commande ne correspond.':'Aucune commande pour l’instant.<br>Touche « Nouvelle commande » quand un coupon est rendu.'}</div>`;
+  if(F.grp)return grouped(r);
   const dis=canWrite?'':'disabled';
-  return f.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(o=>`<div class="card"><div data-edit="${esc(o.id)}"><div class="top"><div><div class="nom">${esc(o.nom)}</div><div class="sub">${esc(o.classe)}${o.tel?' · '+esc(o.tel):''}</div></div><div class="amt">${eur(ot(o))}</div></div>
+  return r.map(x=>x.o).sort((a,b)=>(b.ts||0)-(a.ts||0)).map(o=>`<div class="card"><div data-edit="${esc(o.id)}"><div class="top"><div><div class="nom">${esc(o.nom)}</div><div class="sub">${esc(o.classe)}${o.tel?' · '+esc(o.tel):''}</div></div><div class="amt">${eur(ot(o))}</div></div>
     <ul class="items">${o.lignes.map(l=>`<li>${l.qte} × ${A(l.article).nom}, ${l.taille}, ${esc(l.couleur)}${l.prenom?` — <b>${esc(l.prenom)}</b>`:''}</li>`).join('')}</ul>${by(o)}</div>
     <div class="badges"><button ${dis} class="tg ${o.paye?'pay':'no'}" data-pay="${esc(o.id)}">${o.paye?'Payé'+(o.mode?' ('+o.mode.toLowerCase()+')':''):'À payer'}</button>
     <button ${dis} class="tg ${o.livre?'liv':''}" data-liv="${esc(o.id)}">${o.livre?'Remis':'À remettre'}</button></div></div>`).join('');
 }
-function grouped(f){
-  const key=(o,l)=>grp=='taille'?l.taille:grp=='couleur'?l.couleur:grp=='article'?A(l.article).nom:(o.classe||'Sans classe');
+function grouped(r){
   const g={};
-  f.forEach(o=>o.lignes.forEach(l=>{const k=key(o,l);(g[k]=g[k]||[]).push({o,l})}));
-  const ks=Object.keys(g).sort((a,b)=>grp=='taille'?TAILLES.indexOf(a)-TAILLES.indexOf(b):a.localeCompare(b,'fr'));
-  return ks.map(k=>{const it=g[k].sort((a,b)=>(a.o.nom||'').localeCompare(b.o.nom||'','fr'));
+  flat(r).forEach(x=>{const k=gkey(x.o,x.l);(g[k]=g[k]||[]).push(x)});
+  return Object.keys(g).sort(gsort).map(k=>{const it=g[k].sort((a,b)=>(a.o.nom||'').localeCompare(b.o.nom||'','fr'));
     return `<h2>${esc(k)} <span class="small">— ${it.reduce((s,x)=>s+x.l.qte,0)} pièce(s)</span></h2>`+
     it.map(({o,l})=>`<div class="card" data-edit="${esc(o.id)}" style="padding:10px 12px"><div class="top"><div><div class="nom">${esc(o.nom)}</div><div class="sub">${esc(o.classe)}</div></div><div class="sub" style="text-align:right">${o.paye?'Payé':'À payer'} · ${o.livre?'Remis':'À remettre'}</div></div>
     <div class="items" style="margin:6px 0 0">${l.qte} × ${A(l.article).nom}, ${l.taille}, ${esc(l.couleur)}${l.prenom?` — <b>${esc(l.prenom)}</b>`:''}</div></div>`).join('')}).join('');
 }
+function qtyTable(items,title,tot){
+  const m={};items.forEach(({l})=>{const k=[l.article,l.taille,l.couleur].join('|');m[k]=(m[k]||0)+l.qte});
+  const ks=Object.keys(m).sort((x,y)=>ART.findIndex(a=>a.id==x.split('|')[0])-ART.findIndex(a=>a.id==y.split('|')[0])||TAILLES.indexOf(x.split('|')[1])-TAILLES.indexOf(y.split('|')[1])||x.localeCompare(y));
+  return `<table style="margin-bottom:12px"><tr><th colspan="3">${esc(title)}</th><th class="n">${tot}</th></tr>`+
+    ks.map(k=>{const[a,t,c]=k.split('|');return `<tr><td>${A(a).nom}</td><td>${t}</td><td>${esc(c)}</td><td class="n">${m[k]}</td></tr>`}).join('')+'</table>';
+}
 function totals(){
   let h='';
   if(shared&&localOld.length&&canWrite)h+=`<div class="card"><b>${localOld.length} commande(s) trouvée(s) sur cet appareil</b><div class="sub">Elles ne sont pas encore partagées.</div><button class="btn p" id="imp" style="width:100%;margin-top:8px">Les ajouter à la liste partagée</button></div>`;
-  if(!orders.length)return h+'<div class="empty">Les totaux apparaîtront avec les premières commandes.</div>';
-  const m={},pre=[];
-  orders.forEach(o=>o.lignes.forEach(l=>{
-    const k=[l.article,l.taille,l.couleur].join('|');m[k]=(m[k]||0)+l.qte;
-    if(l.prenom)pre.push(`${l.prenom} — ${A(l.article).nom}, ${l.taille}, ${l.couleur}${l.qte>1?' (×'+l.qte+')':''}`);}));
-  h+='<h2>Quantités à commander</h2>';
-  ART.forEach(a=>{
-    const rows=Object.keys(m).filter(k=>k.startsWith(a.id+'|')).sort((x,y)=>TAILLES.indexOf(x.split('|')[1])-TAILLES.indexOf(y.split('|')[1]));
-    if(!rows.length)return;
-    h+=`<table style="margin-bottom:12px"><tr><th colspan="2">${a.nom}</th><th class="n">${rows.reduce((s,k)=>s+m[k],0)}</th></tr>`+
-      rows.map(k=>{const[,t,c]=k.split('|');return `<tr><td>${t}</td><td>${esc(c)}</td><td class="n">${m[k]}</td></tr>`}).join('')+'</table>';
-  });
-  const tot=orders.reduce((s,o)=>s+ot(o),0),enc=orders.filter(o=>o.paye).reduce((s,o)=>s+ot(o),0);
-  h+=`<h2>Argent</h2><table><tr><td>Encaissé</td><td class="n">${eur(enc)}</td></tr><tr><td>Reste à encaisser</td><td class="n">${eur(tot-enc)}</td></tr></table>`;
+  const L=flat(rows());
+  if(!L.length)return h+'<div class="empty">Aucune pièce ne correspond. Les totaux apparaîtront avec les commandes.</div>';
+  const qt=x=>x.reduce((s,y)=>s+y.l.qte,0);
+  h+=`<h2>${F.grp?'Quantités par groupe':'Quantités à commander'}</h2>`;
+  if(F.grp){
+    const g={};L.forEach(x=>{const k=gkey(x.o,x.l);(g[k]=g[k]||[]).push(x)});
+    Object.keys(g).sort(gsort).forEach(k=>{h+=qtyTable(g[k],k,qt(g[k]))});
+  }else h+=qtyTable(L,F.article||F.taille||F.couleur||F.classe||F.statut?'Résultat des filtres':'Toutes les pièces',qt(L));
+  const tot=L.reduce((s,x)=>s+lt(x.l),0),enc=L.filter(x=>x.o.paye).reduce((s,x)=>s+lt(x.l),0);
+  h+=`<h2>Argent</h2><table><tr><td>Total</td><td class="n">${eur(tot)}</td></tr><tr><td>Encaissé</td><td class="n">${eur(enc)}</td></tr><tr><td>Reste à encaisser</td><td class="n">${eur(tot-enc)}</td></tr></table>`;
+  const pre=L.filter(x=>x.l.prenom).map(x=>`${x.l.prenom} — ${A(x.l.article).nom}, ${x.l.taille}, ${x.l.couleur}${x.l.qte>1?' (×'+x.l.qte+')':''}`);
   h+=`<h2>Prénoms à broder (${pre.length})</h2><table>${pre.sort().map(p=>`<tr><td>${esc(p)}</td></tr>`).join('')||'<tr><td>Aucun</td></tr>'}</table>
   <h2>Exporter</h2><button class="btn" id="csv" style="width:100%">Afficher les données (CSV) à copier</button>`;
   return h;
@@ -229,12 +267,17 @@ function lineHtml(l,i){
   <div class="row"><input data-k="prenom" placeholder="PRÉNOM (+5 €), facultatif" value="${esc(l.prenom)}" style="text-transform:uppercase">
   <div class="qty"><button class="btn" data-q="-1" data-i="${i}">−</button><b>${l.qte}</b><button class="btn" data-q="1" data-i="${i}">+</button></div></div></div>`;
 }
+function classeHtml(cur){
+  return `<details class="fp" id="cls" style="margin:0"><summary id="clsum">${esc(cur)||'Choisir la classe'}</summary>`+
+  CLASSES.map(([g,l])=>`<div class="small" style="margin:12px 0 2px"><b>${g}</b></div>`+l.map(c=>`<label class="chk"><input type="checkbox" data-cls="${esc(c)}" ${c==cur?'checked':''}> ${esc(c)}</label>`).join('')).join('')+`</details>`;
+}
 function form(){
   const o=draft;
   $('#modal').innerHTML=`<div class="sheet"><div class="panel">
   <h2 style="margin-top:0">${o.isNew?'Nouvelle commande':'Modifier la commande'}</h2>
   <label>Nom du client</label><input id="f_nom" value="${esc(o.nom)}" autocomplete="off"><div id="dup"></div>
-  <div class="row"><div><label>Classe / Promo</label><input id="f_classe" value="${esc(o.classe)}"></div><div><label>Téléphone</label><input id="f_tel" type="tel" value="${esc(o.tel)}"></div></div>
+  <label>Classe / Promo</label>${classeHtml(o.classe)}
+  <label>Téléphone</label><input id="f_tel" type="tel" value="${esc(o.tel)}">
   <div id="lines">${o.lignes.map(lineHtml).join('')}</div>
   <button class="btn" id="addl" style="width:100%;margin-top:10px">+ Ajouter un article</button>
   <div class="tot"><span>Total</span><span id="ftot">${eur(ot(o))}</span></div>
@@ -244,7 +287,7 @@ function form(){
   </div></div>`;
   $('#f_mode').value=o.mode||'';draft.force=false;showDup();
 }
-function readBase(){const o=draft;o.nom=$('#f_nom').value;o.classe=$('#f_classe').value;o.tel=$('#f_tel').value;o.mode=$('#f_mode').value}
+function readBase(){const o=draft;o.nom=$('#f_nom').value;o.tel=$('#f_tel').value;o.mode=$('#f_mode').value}
 const norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/).filter(Boolean).sort().join(' ');
 const dupOf=()=>{const n=norm(draft.nom);return n?orders.find(x=>x.id!=draft.id&&norm(x.nom)==n):null};
 function showDup(){
@@ -263,6 +306,7 @@ document.addEventListener('click',e=>{
   else if(t.dataset.edit){const o=find(t.dataset.edit);if(!o)return;if(!canWrite){toast('Lecture seule : tu ne peux pas modifier.');return}draft=JSON.parse(JSON.stringify(o));form()}
   else if(t.dataset.pay){const o=find(t.dataset.pay);if(o)patch(o,{paye:!o.paye})}
   else if(t.dataset.liv){const o=find(t.dataset.liv);if(o)patch(o,{livre:!o.livre})}
+  else if(t.id=='reset'){F={statut:'',classe:'',article:'',taille:'',couleur:'',grp:''};q='';setTab(tab)}
   else if(t.id=='cancel')closeForm();
   else if(t.id=='addl'){readBase();draft.lignes.push(newLine());form()}
   else if(t.dataset.rm){readBase();draft.lignes.splice(+t.dataset.rm,1);form()}
@@ -295,8 +339,13 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
   const el=e.target;
-  if(el.id=='grp'){grp=el.value;$('#list').innerHTML=list();return}
-  if(el.id=='flt'){flt=el.value;$('#list').innerHTML=list();return}
+  if(el.dataset.cls!==undefined&&draft){
+    document.querySelectorAll('[data-cls]').forEach(x=>{if(x!==el)x.checked=false});
+    draft.classe=el.checked?el.dataset.cls:'';
+    $('#clsum').textContent=draft.classe||'Choisir la classe';
+    if(el.checked)$('#cls').open=false;
+    return}
+  if(el.dataset.f){F[el.dataset.f]=el.value;refresh();return}
   const k=el.dataset.k;if(!draft||!k||k=='prenom')return;
   const l=draft.lignes[+el.closest('.line').dataset.i];l[k]=el.value;
   if(k=='article'){readBase();l.couleur=A(l.article).cols[0];form()}
